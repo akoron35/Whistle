@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Whistle">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);box-sizing:border-box}body{margin:0;font:14px system-ui}[hidden]{display:none!important}</style>
+<title>Range Whistle</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700&family=Barlow:wght@400;600&display=swap">
+<style>
+/* Layout: single-screen range clock — status lamp, tappable sequence steps, start/stop + emergency controls */
+:root{
+  --bg:#f3f4f1; --fg:#14171a; --muted:#5e6660; --line:#d6dad3; --card:#ffffff;
+  --red:#c8202f; --green:#1f8a4c; --yellow:#e0a800; --gold:#f2c230; --blue:#1d5fa8;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101312; --fg:#eef0ec; --muted:#9aa39c; --line:#2a302d; --card:#181c1a;
+  --red:#ff5562; --green:#3ec97a; --yellow:#ffc928; --gold:#ffd54a; --blue:#5b9cf0; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#101312; --fg:#eef0ec; --muted:#9aa39c; --line:#2a302d; --card:#181c1a;
+  --red:#ff5562; --green:#3ec97a; --yellow:#ffc928; --gold:#ffd54a; --blue:#5b9cf0; color-scheme:dark}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--body)}
+.wrap{max-width:520px;margin:0 auto;padding-block:20px 28px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:flex;flex-direction:column;gap:16px;min-height:100%;box-sizing:border-box}
+header{display:flex;align-items:center;gap:10px}
+.target{width:28px;height:28px;border-radius:50%;flex:none;
+  background:radial-gradient(circle,var(--gold) 0 30%,var(--red) 30% 55%,var(--blue) 55% 80%,var(--fg) 80% 100%)}
+h1{font-family:var(--display);font-weight:700;font-size:1.6rem;letter-spacing:.02em;margin:0;text-transform:uppercase}
+.lamp{border-radius:14px;padding:16px;text-align:center;background:var(--card);border:2px solid var(--line);transition:border-color .2s}
+.lamp .state{font-family:var(--display);font-weight:700;font-size:1.3rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.lamp .time{font-family:var(--display);font-weight:700;font-size:clamp(5rem,26vw,8rem);line-height:1;font-variant-numeric:tabular-nums}
+.lamp .next{color:var(--muted);font-size:.95rem;min-height:1.3em}
+.lamp[data-c="red"]{border-color:var(--red)} .lamp[data-c="red"] .state{color:var(--red)}
+.lamp[data-c="green"]{border-color:var(--green)} .lamp[data-c="green"] .state{color:var(--green)}
+.lamp[data-c="yellow"]{border-color:var(--yellow)} .lamp[data-c="yellow"] .state{color:var(--yellow)}
+.lamp.emerg{background:var(--red);border-color:var(--red)} .lamp.emerg *{color:#fff!important}
+.hint{color:var(--muted);font-size:.8rem;letter-spacing:.08em;text-transform:uppercase;margin:0 0 -8px 2px}
+ol{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.row{width:100%;display:grid;grid-template-columns:4.2rem 1fr auto 1.2rem;gap:10px;align-items:center;text-align:left;
+  padding:10px 12px;border-radius:10px;border:1px solid transparent;background:transparent;
+  font-family:var(--body);font-weight:400;font-size:.98rem;letter-spacing:0;text-transform:none}
+.row:hover{background:var(--card);border-color:var(--line)}
+.row .b{font-family:var(--display);font-weight:700;font-size:1.05rem;letter-spacing:.06em}
+.row .d{color:var(--muted);font-variant-numeric:tabular-nums}
+.row .go{color:var(--muted);font-size:.9rem}
+.row.on{background:var(--card);border-color:var(--fg)}
+.row.done{opacity:.4}
+button{font:inherit;font-family:var(--display);font-weight:700;font-size:1.4rem;letter-spacing:.08em;text-transform:uppercase;
+  border-radius:12px;border:2px solid var(--line);background:var(--card);color:var(--fg);padding:16px;cursor:pointer}
+button:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+.controls{display:flex;gap:10px;margin-top:auto}
+#go{flex:1;background:var(--green);border-color:var(--green);color:#fff}
+#go.stop{background:var(--fg);border-color:var(--fg);color:var(--bg)}
+#test{font-size:1rem;padding:16px 14px}
+#emerg{width:100%;background:transparent;border-color:var(--red);color:var(--red);font-size:1.25rem}
+#emerg:active{background:var(--red);color:#fff}
+.note{color:var(--muted);font-size:.85rem;margin:0;text-align:center}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header><span class="target" aria-hidden="true"></span><h1>Range Whistle</h1></header>
+
+  <div class="lamp" id="lamp" data-c="">
+    <div class="state" id="state">Ready</div>
+    <div class="time" id="time">0:00</div>
+    <div class="next" id="next">Tap Start, or tap any step to begin there</div>
+  </div>
+
+  <p class="hint">Tap a step to jump to it</p>
+  <ol id="list"></ol>
+
+  <div class="controls">
+    <button id="test" type="button">Test</button>
+    <button id="go" type="button">Start</button>
+  </div>
+  <button id="emerg" type="button">●●●●● Emergency stop</button>
+  <p class="note">Turn your volume all the way up and keep this screen open.</p>
+</div>
+
+<script>
+(() => {
+  const BLEN = 0.55, GAP = 0.3;
+  const FAST_LEN = 0.2, FAST_GAP = 0.1;
+  const SEQ = [
+    {n:2, label:"To the line", wait:10, color:"red", phase:"Walk to line"},
+    {n:1, label:"Shoot",       wait:120, color:"green", phase:"Shoot", warn:30},
+    {n:2, label:"To the line", wait:10, color:"red", phase:"Walk to line"},
+    {n:1, label:"Shoot",       wait:120, color:"green", phase:"Shoot", warn:30},
+    {n:3, label:"Collect",     wait:0, color:"red", phase:"Collect arrows"},
+  ];
+  const $ = id => document.getElementById(id);
+  const list = $("list"), lamp = $("lamp");
+  const fmt = s => { s = Math.max(0, Math.ceil(s)); return Math.floor(s/60) + ":" + String(s%60).padStart(2,"0"); };
+
+  const rows = SEQ.map((s, k) => {
+    const li = document.createElement("li");
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "row"; b.id = "step" + k;
+    b.innerHTML = `<span class="b">${"●".repeat(s.n)}</span><span>${s.label}</span><span class="d">${s.wait ? (s.wait>=60 ? fmt(s.wait) : s.wait+"s") : "end"}</span><span class="go" aria-hidden="true">▸</span>`;
+    b.setAttribute("aria-label", `Jump to: ${s.n} blast${s.n>1?"s":""}, ${s.label}`);
+    b.addEventListener("click", () => start(k));
+    li.appendChild(b); list.appendChild(li);
+    return b;
+  });
+
+  let ctx, master, running = false, raf, plan = [], wake;
+
+  // Fresh output bus each run; disconnecting the old one silences anything still scheduled on it
+  function bus(){
+    if (!ctx) ctx = new (window.AudioContext||window.webkitAudioContext)();
+    if (ctx.state === "suspended") ctx.resume();
+    if (master) { try { master.disconnect(); } catch(e){} }
+    master = ctx.createGain(); master.gain.value = 0.9;
+    const comp = ctx.createDynamicsCompressor();
+    master.connect(comp); comp.connect(ctx.destination);
+    return master;
+  }
+
+  // Pea-whistle: high tone with a fast trill
+  function blast(t, out, BLAST = BLEN){
+    const o = ctx.createOscillator(), o2 = ctx.createOscillator();
+    o.type = "sine"; o2.type = "triangle";
+    o.frequency.value = 3150; o2.frequency.value = 3150*1.006;
+    const lfo = ctx.createOscillator(); lfo.frequency.value = 34;
+    const lfoF = ctx.createGain(); lfoF.gain.value = 120;
+    lfo.connect(lfoF); lfoF.connect(o.frequency); lfoF.connect(o2.frequency);
+    const am = ctx.createGain(); am.gain.value = 0.7;
+    const lfoA = ctx.createGain(); lfoA.gain.value = 0.3;
+    lfo.connect(lfoA); lfoA.connect(am.gain);
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0, t);
+    env.gain.linearRampToValueAtTime(1, t+0.02);
+    env.gain.setValueAtTime(1, t+BLAST-0.04);
+    env.gain.linearRampToValueAtTime(0, t+BLAST);
+    const mix2 = ctx.createGain(); mix2.gain.value = 0.35;
+    o.connect(am); o2.connect(mix2); mix2.connect(am); am.connect(env); env.connect(out);
+    [o,o2,lfo].forEach(n => { n.start(t); n.stop(t+BLAST+0.05); });
+  }
+  const blasts = (n, t, out, len = BLEN, gap = GAP) => { for (let i=0;i<n;i++) blast(t + i*(len+gap), out, len); return n*(len+gap) - gap; };
+
+  function lockScreen(){ try { if (!wake) navigator.wakeLock?.request("screen").then(w => wake = w).catch(()=>{}); } catch(e){} }
+  function unlockScreen(){ try { wake?.release(); } catch(e){} wake = null; }
+
+  function start(from = 0){
+    cancelAnimationFrame(raf);
+    lamp.classList.remove("emerg");
+    const out = bus();
+    let t = ctx.currentTime + 0.25;
+    plan = SEQ.map((s, k) => {
+      if (k < from) return null;
+      const dur = blasts(s.n, t, out);
+      const p = {...s, k, at:t, waitStart:t+dur, waitEnd:t+dur+s.wait};
+      t = p.waitEnd;
+      return p;
+    }).filter(Boolean);
+    running = true;
+    $("go").textContent = "Stop"; $("go").classList.add("stop");
+    lockScreen();
+    tick();
+  }
+
+  function idle(msg, sub){
+    running = false; cancelAnimationFrame(raf); unlockScreen();
+    $("go").textContent = "Start"; $("go").classList.remove("stop");
+    $("state").textContent = msg; $("time").textContent = "0:00"; $("next").textContent = sub;
+  }
+
+  function stop(){
+    if (master) { try { master.disconnect(); } catch(e){} master = null; }
+    lamp.dataset.c = ""; lamp.classList.remove("emerg");
+    rows.forEach(r => r.className = "row");
+    idle("Stopped", "Tap Start, or tap any step to begin there");
+  }
+
+  function emergency(){
+    const out = bus();
+    blasts(5, ctx.currentTime + 0.05, out, FAST_LEN, FAST_GAP);
+    lamp.dataset.c = "red"; lamp.classList.add("emerg");
+    rows.forEach(r => r.className = "row");
+    idle("Stop shooting", "Emergency stop · tap a step to resume");
+  }
+
+  function tick(){
+    const now = ctx.currentTime;
+    let i = plan.findIndex(p => now < p.waitEnd);
+    const last = plan[plan.length-1];
+    if (i === -1) {
+      if (now > last.waitStart + 0.2) {
+        lamp.dataset.c = "red";
+        rows.forEach(r => r.className = "row done");
+        idle("Collect arrows", "Sequence complete · tap Start for the next round");
+        return;
+      }
+      i = plan.length-1;
+    }
+    const p = plan[i];
+    rows.forEach((r,k) => r.className = "row" + (k < p.k ? " done" : k === p.k ? " on" : ""));
+    if (now < p.at) { $("state").textContent = "Get ready"; lamp.dataset.c = ""; $("time").textContent = fmt(p.wait); }
+    else {
+      const left = now < p.waitStart ? p.wait : p.waitEnd - now;
+      lamp.dataset.c = p.warn && left <= p.warn ? "yellow" : p.color;
+      $("state").textContent = p.phase;
+      $("time").textContent = fmt(left);
+    }
+    const nx = plan[i+1];
+    $("next").textContent = nx ? `Next: ${nx.n} blast${nx.n>1?"s":""} · ${nx.label}` : "";
+    raf = requestAnimationFrame(tick);
+  }
+
+  $("go").addEventListener("click", () => running ? stop() : start(0));
+  $("test").addEventListener("click", () => { if (running) return; const out = bus(); blast(ctx.currentTime+0.05, out); });
+  $("emerg").addEventListener("click", emergency);
+})();
+</script>
+
+</body>
+</html>
